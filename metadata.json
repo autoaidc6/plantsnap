@@ -1,0 +1,7 @@
+{
+  "name": "PlantSnap - AI Plant Identifier",
+  "description": "An AI-powered app to identify plants from images. Get detailed information, care instructions, and eco-friendly gardening tips instantly.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
