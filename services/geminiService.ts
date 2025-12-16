@@ -16,11 +16,9 @@ async function fileToGenerativePart(file: File) {
     const reader = new FileReader();
     reader.onloadend = () => {
       if (typeof reader.result === 'string') {
-        // The result includes the data URL prefix (e.g., "data:image/jpeg;base64,"),
-        // which should be removed.
         resolve(reader.result.split(',')[1]);
       } else {
-        resolve(''); // Should not happen with readAsDataURL
+        resolve('');
       }
     };
     reader.readAsDataURL(file);
@@ -39,8 +37,10 @@ export async function identifyPlant(imageFile: File): Promise<PlantInfo> {
 
   const prompt = `
     Identify the plant in this image. Provide a detailed description, its natural habitat, and care instructions.
-    Additionally, offer eco-friendly solutions for pest control and suggest some companion plants.
-    Return the information in a valid JSON format. Do not include any markdown formatting like \`\`\`json.
+    Analyze the plant's health visible in the image. Determine if it is healthy or has diseases/pests.
+    If it has issues, describe them and provide eco-friendly treatment solutions.
+    Also offer general eco-friendly pest control advice and companion plants.
+    Return the information in a valid JSON format.
   `;
   
   const responseSchema = {
@@ -48,27 +48,36 @@ export async function identifyPlant(imageFile: File): Promise<PlantInfo> {
     properties: {
       commonName: { type: Type.STRING, description: "Common name of the plant." },
       scientificName: { type: Type.STRING, description: "Scientific name of the plant." },
-      description: { type: Type.STRING, description: "A brief description of the plant's characteristics." },
-      habitat: { type: Type.STRING, description: "The natural habitat or origin of the plant." },
+      description: { type: Type.STRING, description: "A brief description of the plant." },
+      habitat: { type: Type.STRING, description: "The natural habitat." },
       careTips: {
         type: Type.OBJECT,
         properties: {
-          watering: { type: Type.STRING, description: "Watering requirements and schedule." },
-          sunlight: { type: Type.STRING, description: "Sunlight needs (e.g., full sun, partial shade)." },
-          soil: { type: Type.STRING, description: "Preferred soil type and drainage." },
+          watering: { type: Type.STRING },
+          sunlight: { type: Type.STRING },
+          soil: { type: Type.STRING },
         },
         required: ["watering", "sunlight", "soil"],
       },
       ecoFriendlySolutions: {
         type: Type.OBJECT,
         properties: {
-          pestControl: { type: Type.STRING, description: "Eco-friendly methods to control common pests for this plant." },
-          companionPlants: { type: Type.STRING, description: "Plants that grow well alongside this plant." },
+          pestControl: { type: Type.STRING, description: "General eco-friendly pest control methods." },
+          companionPlants: { type: Type.STRING },
         },
         required: ["pestControl", "companionPlants"],
       },
+      healthAssessment: {
+        type: Type.OBJECT,
+        properties: {
+          isHealthy: { type: Type.BOOLEAN, description: "True if the plant looks healthy, false otherwise." },
+          issues: { type: Type.STRING, description: "Description of any diseases or pests found. 'None' if healthy." },
+          treatment: { type: Type.STRING, description: "Recommended treatment for identified issues. 'N/A' if healthy." },
+        },
+        required: ["isHealthy", "issues", "treatment"],
+      }
     },
-    required: ["commonName", "scientificName", "description", "habitat", "careTips", "ecoFriendlySolutions"],
+    required: ["commonName", "scientificName", "description", "habitat", "careTips", "ecoFriendlySolutions", "healthAssessment"],
   };
 
   try {
@@ -86,7 +95,7 @@ export async function identifyPlant(imageFile: File): Promise<PlantInfo> {
   } catch (error) {
     console.error("Error identifying plant:", error);
     if (error instanceof Error) {
-        throw new Error(`Failed to identify plant. The AI model returned an error: ${error.message}`);
+        throw new Error(`Failed to identify plant: ${error.message}`);
     }
     throw new Error("Failed to identify plant due to an unknown error.");
   }

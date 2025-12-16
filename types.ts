@@ -13,4 +13,15 @@ export interface PlantInfo {
     pestControl: string;
     companionPlants: string;
   };
+  healthAssessment: {
+    isHealthy: boolean;
+    issues: string;
+    treatment: string;
+  };
+}
+
+export interface HistoryItem extends PlantInfo {
+  id: string;
+  timestamp: number;
+  thumbnail: string; // Base64 image data
 }

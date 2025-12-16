@@ -1,68 +1,115 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { PlantInfo } from './types';
+
+import React, { useState, useEffect } from 'react';
+import { PlantInfo, HistoryItem } from './types';
 import { identifyPlant } from './services/geminiService';
-import ImageUploader from './components/ImageUploader';
 import PlantInfoCard from './components/PlantInfoCard';
 import Loader from './components/Loader';
 import SplashScreen from './components/SplashScreen';
-import { LeafIcon } from './components/icons/LeafIcon';
+import HomeView from './components/HomeView';
+import HistoryView from './components/HistoryView';
+import AboutView from './components/AboutView';
+import NavBar from './components/NavBar';
+
+type ViewState = 'home' | 'history' | 'about' | 'details';
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
-  const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [currentView, setCurrentView] = useState<ViewState>('home');
   const [plantInfo, setPlantInfo] = useState<PlantInfo | null>(null);
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
 
+  // Load history from localStorage
   useEffect(() => {
     const timer = setTimeout(() => {
       setShowSplash(false);
     }, 2500);
+
+    const savedHistory = localStorage.getItem('plantSnapHistory');
+    if (savedHistory) {
+      try {
+        setHistory(JSON.parse(savedHistory));
+      } catch (e) {
+        console.error("Failed to parse history", e);
+      }
+    }
     return () => clearTimeout(timer);
   }, []);
 
+  // Save history to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('plantSnapHistory', JSON.stringify(history));
+  }, [history]);
 
-  const handleImageSelect = useCallback((file: File) => {
-    setSelectedImage(file);
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
-    setPreviewUrl(URL.createObjectURL(file));
-    setPlantInfo(null);
-    setError(null);
-  }, [previewUrl]);
-
-  const handleIdentifyClick = async () => {
-    if (!selectedImage) return;
-
+  const handleImageSelect = async (file: File) => {
+    // Create local preview
+    const previewUrl = URL.createObjectURL(file);
+    setSelectedImagePreview(previewUrl);
+    
     setIsLoading(true);
     setError(null);
     setPlantInfo(null);
+    setCurrentView('details'); // Switch to details view immediately to show loader
 
     try {
-      const result = await identifyPlant(selectedImage);
+      // 1. Identify plant
+      const result = await identifyPlant(file);
       setPlantInfo(result);
+
+      // 2. Compress image for storage (simple canvas resize to avoid localStorage quota)
+      // For this demo, we'll use the preview URL if it's small, but realistically we need base64
+      // We will create a small thumbnail base64
+      const thumbnailBase64 = await createThumbnail(file);
+
+      // 3. Add to history
+      const newHistoryItem: HistoryItem = {
+        ...result,
+        id: Date.now().toString(),
+        timestamp: Date.now(),
+        thumbnail: thumbnailBase64
+      };
+
+      setHistory(prev => [newHistoryItem, ...prev]);
+
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
       } else {
         setError('An unexpected error occurred.');
       }
+      // Stay on details view to show error, but maybe offer retry?
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleReset = () => {
-    setSelectedImage(null);
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-    }
-    setPreviewUrl(null);
-    setPlantInfo(null);
-    setError(null);
-    setIsLoading(false);
+  const createThumbnail = (file: File): Promise<string> => {
+      return new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+              const img = new Image();
+              img.onload = () => {
+                  const canvas = document.createElement('canvas');
+                  const ctx = canvas.getContext('2d');
+                  const MAX_WIDTH = 300;
+                  const scale = MAX_WIDTH / img.width;
+                  canvas.width = MAX_WIDTH;
+                  canvas.height = img.height * scale;
+                  ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+                  resolve(canvas.toDataURL('image/jpeg', 0.7));
+              };
+              img.src = e.target?.result as string;
+          };
+          reader.readAsDataURL(file);
+      });
+  };
+
+  const handleHistoryItemSelect = (item: HistoryItem) => {
+    setPlantInfo(item);
+    setCurrentView('details');
+    window.scrollTo(0,0);
   };
 
   if (showSplash) {
@@ -70,64 +117,75 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-green-50 to-emerald-50 text-gray-800 font-sans animate-fade-in">
-      <header className="bg-white/80 backdrop-blur-md shadow-sm sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-center">
-          <LeafIcon className="h-8 w-8 text-green-600 mr-3" />
-          <h1 className="text-3xl font-bold text-green-800 tracking-tight">
-            PlantSnap
-          </h1>
-        </div>
-      </header>
+    <div className="min-h-screen bg-gradient-to-b from-green-50 to-emerald-50 text-gray-800 font-sans">
+      <NavBar 
+        currentView={currentView === 'details' ? 'home' : currentView} 
+        onChangeView={(view) => {
+            setCurrentView(view);
+            setError(null);
+        }} 
+      />
 
-      <main className="container mx-auto p-4 md:p-8">
-        <div className="max-w-2xl mx-auto bg-white/90 backdrop-blur-lg rounded-2xl shadow-lg p-6 md:p-8 transition-all duration-300">
-          {!plantInfo && !isLoading && (
-             <div className="text-center">
-                <h2 className="text-2xl font-semibold text-gray-700 mb-2">Identify a Plant</h2>
-                <p className="text-gray-500 mb-6">Take a photo or upload an image to get started.</p>
-             </div>
-          )}
+      <main className="container mx-auto p-4 md:p-8 min-h-[calc(100vh-80px)]">
+        
+        {/* VIEW: HOME */}
+        {currentView === 'home' && (
+           <HomeView onImageSelect={handleImageSelect} />
+        )}
 
-          <ImageUploader onImageSelect={handleImageSelect} previewUrl={previewUrl} disabled={isLoading} />
-          
-          {error && (
-            <div className="mt-6 bg-red-100 border-l-4 border-red-500 text-red-700 p-4 rounded-md" role="alert">
-              <p className="font-bold">Error</p>
-              <p>{error}</p>
-            </div>
-          )}
+        {/* VIEW: HISTORY */}
+        {currentView === 'history' && (
+           <HistoryView history={history} onSelectItem={handleHistoryItemSelect} />
+        )}
 
-          <div className="mt-6 flex flex-col sm:flex-row gap-4">
-            <button
-              onClick={handleIdentifyClick}
-              disabled={!selectedImage || isLoading}
-              className="w-full flex-1 bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors duration-300 shadow-md hover:shadow-lg disabled:shadow-none"
+        {/* VIEW: ABOUT */}
+        {currentView === 'about' && (
+           <AboutView />
+        )}
+
+        {/* VIEW: DETAILS / LOADING / ERROR */}
+        {currentView === 'details' && (
+          <div className="max-w-4xl mx-auto animate-fade-in">
+            <button 
+                onClick={() => setCurrentView('home')}
+                className="mb-4 text-green-700 font-semibold flex items-center hover:underline"
             >
-              {isLoading ? 'Identifying...' : 'Identify Plant'}
+                ← Back to Home
             </button>
-            {(selectedImage || plantInfo) && (
-               <button
-                  onClick={handleReset}
-                  disabled={isLoading}
-                  className="w-full sm:w-auto bg-gray-200 text-gray-700 font-bold py-3 px-6 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-400 disabled:opacity-50 transition-colors duration-300"
-               >
-                 Reset
-               </button>
+
+            {isLoading && <Loader />}
+            
+            {error && (
+                <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-6 rounded-md shadow-md" role="alert">
+                    <p className="font-bold text-lg mb-2">Identification Failed</p>
+                    <p>{error}</p>
+                    <button 
+                        onClick={() => setCurrentView('home')}
+                        className="mt-4 bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                        Try Again
+                    </button>
+                </div>
+            )}
+
+            {plantInfo && !isLoading && (
+               <div className="animate-fade-in-up">
+                   {/* If it's a fresh identification, show the source image at the top */}
+                   {!history.find(h => h === plantInfo) && selectedImagePreview && (
+                       <div className="mb-6 rounded-2xl overflow-hidden shadow-lg max-h-64 object-cover w-full">
+                           <img src={selectedImagePreview} alt="Captured plant" className="w-full h-full object-cover" style={{maxHeight: '300px', objectPosition: 'center'}} />
+                       </div>
+                   )}
+                   <PlantInfoCard data={plantInfo} />
+               </div>
             )}
           </div>
-          
-          {isLoading && <Loader />}
-          
-          {plantInfo && !isLoading && (
-            <div className="mt-8 animate-fade-in-up">
-              <PlantInfoCard data={plantInfo} />
-            </div>
-          )}
-        </div>
+        )}
+
       </main>
-      <footer className="text-center py-4 text-sm text-gray-500">
-        <p>Powered by Gemini AI</p>
+
+      <footer className="text-center py-6 text-sm text-gray-400 bg-white/50">
+        <p>© {new Date().getFullYear()} PlantSnap. Powered by Gemini AI.</p>
       </footer>
     </div>
   );
