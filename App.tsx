@@ -9,6 +9,8 @@ import HomeView from './components/HomeView';
 import HistoryView from './components/HistoryView';
 import AboutView from './components/AboutView';
 import NavBar from './components/NavBar';
+import CameraCapture from './components/CameraCapture';
+import { AnimatePresence } from 'motion/react';
 
 type ViewState = 'home' | 'history' | 'about' | 'details';
 
@@ -20,6 +22,7 @@ export default function App() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
+  const [isCapturing, setIsCapturing] = useState(false);
 
   // Load history from localStorage
   useEffect(() => {
@@ -112,12 +115,26 @@ export default function App() {
     window.scrollTo(0,0);
   };
 
+  const handleCapture = (file: File) => {
+    setIsCapturing(false);
+    handleImageSelect(file);
+  };
+
   if (showSplash) {
     return <SplashScreen />;
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-green-50 to-emerald-50 text-gray-800 font-sans">
+      <AnimatePresence>
+        {isCapturing && (
+          <CameraCapture 
+            onCapture={handleCapture} 
+            onClose={() => setIsCapturing(false)} 
+          />
+        )}
+      </AnimatePresence>
+
       <NavBar 
         currentView={currentView === 'details' ? 'home' : currentView} 
         onChangeView={(view) => {
@@ -130,7 +147,7 @@ export default function App() {
         
         {/* VIEW: HOME */}
         {currentView === 'home' && (
-           <HomeView onImageSelect={handleImageSelect} />
+           <HomeView onImageSelect={handleImageSelect} onStartCamera={() => setIsCapturing(true)} />
         )}
 
         {/* VIEW: HISTORY */}

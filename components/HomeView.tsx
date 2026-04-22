@@ -8,9 +8,10 @@ import { BookOpenIcon } from './icons/BookOpenIcon';
 
 interface HomeViewProps {
   onImageSelect: (file: File) => void;
+  onStartCamera: () => void;
 }
 
-const HomeView: React.FC<HomeViewProps> = ({ onImageSelect }) => {
+const HomeView: React.FC<HomeViewProps> = ({ onImageSelect, onStartCamera }) => {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
@@ -31,16 +32,8 @@ const HomeView: React.FC<HomeViewProps> = ({ onImageSelect }) => {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-3xl mb-12">
         {/* Camera Option */}
-        <input
-          type="file"
-          ref={cameraInputRef}
-          onChange={handleFileChange}
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-        />
         <button
-          onClick={() => cameraInputRef.current?.click()}
+          onClick={onStartCamera}
           className="group relative flex flex-col items-center justify-center p-8 h-64 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1 text-white"
         >
           <div className="bg-white/20 p-4 rounded-full mb-4 group-hover:bg-white/30 transition-colors">
