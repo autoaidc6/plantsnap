@@ -38,18 +38,31 @@ async function startServer() {
   };
   const dirname = getDirname();
 
+  // Robust dev vs prod detection
+  let isProd = process.env.NODE_ENV === "production";
+  let vite: any = null;
+
+  if (!isProd) {
+    try {
+      vite = await import("vite");
+    } catch (e) {
+      console.warn("Vite not found. Forcing production mode fallback.", e);
+      isProd = true;
+    }
+  }
+
   // Vite middleware for development
-  if (process.env.NODE_ENV !== "production") {
-    const { createServer: createViteServer } = await import("vite");
-    const vite = await createViteServer({
+  if (!isProd && vite) {
+    const { createServer: createViteServer } = vite;
+    const viteInstance = await createViteServer({
       server: { middlewareMode: true },
       appType: "spa",
     });
-    app.use(vite.middlewares);
+    app.use(viteInstance.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*all', (req, res) => {
+    app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
