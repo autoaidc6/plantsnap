@@ -1,22 +1,28 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { PlantInfo } from '../types';
 
-const API_KEY = process.env.GEMINI_API_KEY;
+let aiClient: GoogleGenAI | null = null;
 
-if (!API_KEY) {
-  throw new Error("GEMINI_API_KEY environment variable not set");
+function getGeminiClient(): GoogleGenAI {
+  if (!aiClient) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY environment variable is required but was not set.");
+    }
+    aiClient = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+  }
+  return aiClient;
 }
 
-const ai = new GoogleGenAI({
-  apiKey: API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-});
-
 export async function identifyPlantServer(base64DataUrl: string): Promise<PlantInfo> {
+  const ai = getGeminiClient();
   // Extract base64 and mimeType from data URL
   const matches = base64DataUrl.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,(.+)$/);
   if (!matches) {
